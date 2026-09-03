@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Live TLE weather-satellite ground tracks and observer pass predictions.">
+  <title>OrbitWeather · Satellite tracker</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+  <script defer src="{{ url_for('orbit_weather.plotly_javascript') }}"></script>
+  <script defer src="{{ url_for('static', filename='app.js') }}"></script>
+</head>
+<body>
+  <header class="app-header">
+    <a class="brand" href="/" aria-label="OrbitWeather home">
+      <span class="brand-mark" aria-hidden="true">◉</span>
+      <span><b>OrbitWeather</b><small>Weather satellite tracker</small></span>
+    </a>
+
+    <div class="header-actions">
+      <label class="satellite-picker" for="satelliteSelect">
+        <span>Satellite</span>
+        <select id="satelliteSelect" disabled aria-label="Choose a weather satellite">
+          <option>Loading satellites…</option>
+        </select>
+      </label>
+      <button class="button secondary" id="customTleButton" type="button">Paste TLE</button>
+      <button class="button secondary" id="refreshTleButton" type="button">Refresh TLE</button>
+      <button class="live-control" id="liveButton" type="button" aria-pressed="true">
+        <span class="live-dot" aria-hidden="true"></span>
+        <span id="liveButtonLabel">Live · 1 s</span>
+      </button>
+    </div>
+  </header>
+
+  <main class="dashboard">
+    <div class="message error-message" id="errorMessage" role="alert" hidden></div>
+    <div class="message warning-message" id="warningMessage" role="status" hidden></div>
+
+    <section class="panel map-panel" aria-labelledby="groundTrackTitle">
+      <div class="panel-heading">
+        <div>
+          <p class="eyebrow">Earth view</p>
+          <h1 id="groundTrackTitle">Ground track</h1>
+        </div>
+        <div class="heading-meta">
+          <span><i class="legend-line past"></i>Past 100 min</span>
+          <span><i class="legend-line future"></i>Next 200 min</span>
+          <span><i class="legend-ring"></i>Radio horizon</span>
+        </div>
+      </div>
+      <div class="plot-shell map-shell">
+        <div class="plot" id="groundTrackPlot" aria-label="Satellite ground-track world map"></div>
+        <div class="plot-loading" id="mapLoading">Calculating orbit…</div>
+      </div>
+      <p class="panel-note">The moving point is propagated every second from the cached TLE; the TLE itself is not downloaded every second.</p>
+    </section>
+
+    <aside class="panel status-panel" aria-labelledby="satelliteName">
+      <div class="satellite-title">
+        <div class="satellite-symbol" aria-hidden="true">✦</div>
+        <div>
+          <p class="eyebrow" id="satelliteMission">Operational meteorology</p>
+          <h2 id="satelliteName">Meteor-M2 4</h2>
+          <p class="muted" id="satelliteMeta">Russia · NORAD 59051</p>
+        </div>
+      </div>
+
+      <section class="status-section" aria-labelledby="positionTitle">
+        <div class="section-heading">
+          <h3 id="positionTitle">Current position</h3>
+          <time id="stateTime">—</time>
+        </div>
+        <div class="metric-grid">
+          <div class="metric"><span>Latitude</span><strong id="positionLatitude">—</strong></div>
+          <div class="metric"><span>Longitude</span><strong id="positionLongitude">—</strong></div>
+          <div class="metric"><span>Altitude</span><strong id="positionAltitude">—</strong></div>
+          <div class="metric"><span>Speed</span><strong id="positionSpeed">—</strong></div>
+        </div>
+      </section>
+
+      <section class="status-section" aria-labelledby="pointingTitle">
+        <div class="section-heading">
+          <h3 id="pointingTitle">Point your antenna</h3>
+          <span class="visibility-badge below" id="visibilityBadge">Checking…</span>
+        </div>
+        <div class="pointing-layout">
+          <div class="compass" aria-hidden="true">
+            <span class="north">N</span><span class="east">E</span><span class="south">S</span><span class="west">W</span>
+            <i class="compass-needle" id="compassNeedle"></i>
+            <b></b>
+          </div>
+          <div class="pointing-values">
+            <div><span>Azimuth</span><strong id="viewAzimuth">—</strong><small id="viewDirection">—</small></div>
+            <div><span>Elevation</span><strong id="viewElevation">—</strong><small>0° horizon · 90° zenith</small></div>
+            <div><span>Range</span><strong id="viewRange">—</strong></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="status-section next-pass-section" aria-labelledby="nextPassTitle">
+        <div class="section-heading">
+          <h3 id="nextPassTitle">Next receivable pass</h3>
+          <span id="passStatus">—</span>
+        </div>
+        <p class="pass-headline" id="passHeadline">Calculating…</p>
+        <div class="pass-facts">
+          <div><span>Starts</span><strong id="passStart">—</strong></div>
+          <div><span>Maximum</span><strong id="passMaximum">—</strong></div>
+          <div><span>Ends</span><strong id="passEnd">—</strong></div>
+        </div>
+      </section>
+    </aside>
+
+    <section class="panel sky-panel" aria-labelledby="skyViewTitle">
+      <div class="panel-heading">
+        <div>
+          <p class="eyebrow">Observer view</p>
+          <h2 id="skyViewTitle">Azimuth–elevation path</h2>
+        </div>
+        <p class="heading-description">North is at the top. The centre is directly overhead.</p>
+      </div>
+      <div class="plot-shell sky-shell">
+        <div class="plot" id="skyViewPlot" aria-label="Polar sky plot of azimuth and elevation during the next pass"></div>
+        <div class="plot-loading" id="skyLoading">Finding the next pass…</div>
+      </div>
+      <div class="sky-summary" id="skySummary">
+        <span>Rise direction <strong id="riseDirection">—</strong></span>
+        <span>Peak elevation <strong id="peakElevation">—</strong></span>
+        <span>Set direction <strong id="setDirection">—</strong></span>
+      </div>
+    </section>
+
+    <aside class="panel settings-panel" aria-labelledby="observerTitle">
+      <div class="panel-heading compact-heading">
+        <div>
+          <p class="eyebrow">Ground station</p>
+          <h2 id="observerTitle">Observer location</h2>
+        </div>
+        <button class="text-button" id="useLocationButton" type="button">Use my location</button>
+      </div>
+
+      <form id="observerForm">
+        <div class="field-grid">
+          <label>Latitude
+            <input id="observerLatitude" name="latitude" type="number" min="-90" max="90" step="0.0001" value="55.7558" required>
+          </label>
+          <label>Longitude
+            <input id="observerLongitude" name="longitude" type="number" min="-180" max="180" step="0.0001" value="37.6173" required>
+          </label>
+          <label>Height above sea level
+            <div class="input-with-unit"><input id="observerElevation" name="elevation_m" type="number" min="-500" max="10000" step="1" value="156" required><span>m</span></div>
+          </label>
+          <label>Minimum useful elevation
+            <div class="input-with-unit"><input id="minimumElevation" name="minimum_elevation" type="number" min="0" max="89" step="1" value="5" required><span>°</span></div>
+          </label>
+        </div>
+        <button class="button primary full-width" type="submit">Update pass prediction</button>
+      </form>
+
+      <p class="settings-help">A higher minimum elevation can approximate nearby buildings, trees, and antenna limits. Terrain is not modelled.</p>
+
+      <details class="tle-details">
+        <summary>TLE and orbit details <span aria-hidden="true">⌄</span></summary>
+        <dl>
+          <div><dt>Source</dt><dd id="tleSource">—</dd></div>
+          <div><dt>Epoch</dt><dd id="tleEpoch">—</dd></div>
+          <div><dt>Age</dt><dd id="tleAge">—</dd></div>
+          <div><dt>Inclination</dt><dd id="orbitInclination">—</dd></div>
+          <div><dt>Period</dt><dd id="orbitPeriod">—</dd></div>
+        </dl>
+        <pre id="tleLines" aria-label="Current two-line element set">—</pre>
+      </details>
+    </aside>
+  </main>
+
+  <dialog id="customTleDialog">
+    <form class="dialog-card" id="customTleForm" method="dialog">
+      <div class="dialog-heading">
+        <div><p class="eyebrow">Custom satellite</p><h2>Paste a TLE</h2></div>
+        <button class="dialog-close" id="closeTleDialog" type="button" aria-label="Close dialog">×</button>
+      </div>
+      <label>Display name
+        <input id="customTleName" type="text" value="My weather satellite" maxlength="80" required>
+      </label>
+      <label>Line 1
+        <textarea id="customTleLine1" rows="3" spellcheck="false" placeholder="1 NNNNNU ..." required></textarea>
+      </label>
+      <label>Line 2
+        <textarea id="customTleLine2" rows="3" spellcheck="false" placeholder="2 NNNNN ..." required></textarea>
+      </label>
+      <p class="dialog-error" id="customTleError" role="alert" hidden></p>
+      <div class="dialog-actions">
+        <button class="button secondary" id="cancelTleDialog" type="button">Cancel</button>
+        <button class="button primary" type="submit">Track satellite</button>
+      </div>
+    </form>
+  </dialog>
+
+  <noscript><p class="noscript">JavaScript is required for the live plots.</p></noscript>
+</body>
+</html>

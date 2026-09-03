@@ -1,2 +1,3 @@
-# skoltech_sat_reciver
-Software for satellite Skoltech project
+# Skoltech project for resieving information from weather_forcasting satellites
+
+
